@@ -18,6 +18,7 @@ package io.agentscope.core.agui.processor;
 import io.agentscope.core.agent.Agent;
 import io.agentscope.core.agui.adapter.AguiAdapterConfig;
 import io.agentscope.core.agui.adapter.AguiAgentAdapter;
+import io.agentscope.core.agui.adapter.EventStreamableAgent;
 import io.agentscope.core.agui.event.AguiEvent;
 import io.agentscope.core.agui.model.AguiMessage;
 import io.agentscope.core.agui.model.RunAgentInput;
@@ -102,8 +103,20 @@ public class AguiRequestProcessor {
             effectiveInput = extractLatestUserMessage(input);
         }
 
-        // Create adapter and run
-        AguiAgentAdapter adapter = new AguiAgentAdapter(agent, config);
+        // Create adapter and run. The adapter needs streamEvents(); bridge any compatible Agent
+        // (ReActAgent / HarnessAgent) reflectively so agentscope-core stays untouched.
+        EventStreamableAgent streamable;
+        try {
+            streamable = EventStreamableAgent.from(agent);
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "Agent '"
+                            + agentId
+                            + "' is not compatible with the AG-UI adapter: "
+                            + e.getMessage(),
+                    e);
+        }
+        AguiAgentAdapter adapter = new AguiAgentAdapter(streamable, config);
         Flux<AguiEvent> events = adapter.run(effectiveInput);
 
         return new ProcessResult(agent, events);
